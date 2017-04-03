@@ -21,4 +21,4 @@ def publish(event):
 
 
 def get_handlers(event):
-    return handlers_registry[event.name]
+    return handlers_registry[event.get_name()]

@@ -1,10 +1,19 @@
 from ..genuuid import genuuid
 from ..storages import LocalMemoryStorage
 from ..storages import Storage
+from ..events import Schema
+from cq import events
 from datetime import datetime
-from pyrsistent import PRecord, field
 from unittest import mock
 import pytest
+
+
+class UserRegistered(events.Event):
+    pass
+
+
+class UserActivated(events.Event):
+    pass
 
 
 @pytest.fixture
@@ -16,48 +25,38 @@ def local_storage():
 @mock.patch('cq.storages.publish')
 def test_store(publish):
     storage = Storage()
-    with mock.patch.object(storage, 'create_event', return_value='EVENT') as create_event,\
-         mock.patch.object(storage, 'append') as append:
-        storage.store('User.Registered', 'aabbcc', {'name': 'joe'})
-        create_event.assert_called_once_with(
-            id='EVENT_ID',
-            name='User.Registered',
-            aggregate_id='aabbcc',
-            data={'name': 'joe'},
-            ts=None,
-        )
-        append.assert_called_once_with('EVENT')
-        publish.assert_called_once_with('EVENT')
+    evt = UserRegistered(aggregate_id='aggregate_id')
+
+    with mock.patch.object(storage, 'append') as append:
+        storage.store(evt)
+
+    append.assert_called_once_with(evt)
+    publish.assert_called_once_with(evt)
 
 
 def test_local__append(local_storage):
-    ts = datetime.utcnow()
+    joe_registered = UserRegistered(aggregate_id='JOE_ID', data={'name': 'joe'})
+    jane_registered = UserRegistered(aggregate_id='JANE_ID', data={'name': 'jane'})
+    joe_activated = UserActivated(aggregate_id='JOE_ID')
 
-    local_storage.store('User.Registered', 'JOE_ID', {'name': 'joe'}, ts)
-    local_storage.store('User.Registered', 'JANE_ID', {'name': 'jane'}, ts)
-    local_storage.store('User.Activated', 'JOE_ID', ts=ts)
+    local_storage.store(joe_registered)
+    local_storage.store(jane_registered)
+    local_storage.store(joe_activated)
 
-    assert [(e.name, e.aggregate_id, e.data, e.ts) for e in local_storage.events] == [
-        ('User.Registered', 'JOE_ID', {'name': 'joe'}, ts),
-        ('User.Registered', 'JANE_ID', {'name': 'jane'}, ts),
-        ('User.Activated', 'JOE_ID', None, ts),
-    ]
+    assert local_storage.events == [joe_registered, jane_registered, joe_activated]
 
 
 def test_local__get_events(local_storage):
-    ts = datetime.utcnow()
+    joe_registered = UserRegistered(aggregate_id='JOE_ID', data={'name': 'joe'})
+    jane_registered = UserRegistered(aggregate_id='JANE_ID', data={'name': 'jane'})
+    joe_activated = UserActivated(aggregate_id='JOE_ID')
 
-    local_storage.store('User.Registered', 'JOE_ID', {'name': 'joe'}, ts)
-    local_storage.store('User.Registered', 'JANE_ID', {'name': 'jane'}, ts)
-    local_storage.store('User.Activated', 'JOE_ID', {'name': 'joe'}, ts)
+    local_storage.store(joe_registered)
+    local_storage.store(jane_registered)
+    local_storage.store(joe_activated)
 
-    assert [(e.name, e.aggregate_id) for e in local_storage.get_events('JOE_ID')] == [
-        ('User.Registered', 'JOE_ID'),
-        ('User.Activated', 'JOE_ID'),
-    ]
-    assert [(e.name, e.aggregate_id) for e in local_storage.get_events('JANE_ID')] == [
-        ('User.Registered', 'JANE_ID'),
-    ]
+    assert local_storage.get_events('JOE_ID') == [joe_registered, joe_activated]
+    assert local_storage.get_events('JANE_ID') == [jane_registered]
 
 
 def test_local__book_unique(local_storage):

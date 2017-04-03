@@ -1,9 +1,8 @@
 import uuid
 from .genuuid import genuuid
 from datetime import datetime
-from pyrsistent import field
-from pyrsistent import PRecord
-from pyrsistent import InvariantException
+from marshmallow import Schema
+from marshmallow import fields
 
 
 def isoformat(format, dt):
@@ -20,35 +19,44 @@ def get_id():
     return genuuid()
 
 
-class EventBody(PRecord):
-    """
-    Base class for `Event.data` field definition.
-    Note: I would suggest `Event` name instead.
-    """
-    pass
-
-
-class Event(PRecord):
+class EventSchema(Schema):
     """
     Base event class that specifies must have event fields.
-    Note: I would suggest `EventEnvelope` name instead.
     """
-    # pyrsistent style event class, like the simplicity of the syntax
-    # UUID & date validation could be added easily.
-    # Serialization is pretty much out of the box here as well.
-    id = field(mandatory=True, type=str, initial=get_id)
-    aggregate_id = field(mandatory=True, type=str)
-    name = field(mandatory=True, type=str)
-    ts = field(
-        mandatory=True,
-        type=datetime,
+    id = fields.Str(required=True, default=get_id)
+    aggregate_id = fields.Str(required=True)
+    name = fields.Str(required=True)
+    ts = fields.DateTime(
+        required=True,
         # use `get_datetime` is ts is not provided on init
-        initial=get_datetime,
+        default=get_datetime,
         # use `get_datetime` if `ts=None` on init
-        factory=get_datetime,
-        serializer=isoformat
+        format='iso'
     )
 
-    # type below should be PRecord or None.
-    # `dict` is left for now, to allieviate fixing alll the failing tests
-    data = field(type=(EventBody, dict, type(None)))
+    data = fields.Nested(Schema, required=False)
+
+
+class Event:
+    schema_class = EventSchema
+
+    def __init__(self, aggregate_id, id=None, name=None, ts=None, data=None):
+        self.id = id or get_id()
+        self.ts = ts or get_datetime()
+        self.aggregate_id = aggregate_id
+        self.data = data
+
+    def serialize(self):
+        if not self.schema_class:
+            raise AttributeError("%s.schema_class not defined." % self.get_name())
+
+        schema = self.schema_class(strict=True)
+        result = schema.dump(self)
+        result.data['name'] = self.get_name()
+        return result.data
+
+    def get_name(self):
+        return self.__class__.__qualname__
+
+    def __str__(self):
+        return '%s | %s | %s' % (self.get_name(), self.aggregate_id, self.ts)

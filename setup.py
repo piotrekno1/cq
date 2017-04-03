@@ -25,7 +25,7 @@ setup(
     packages=get_packages('cq'),
     include_package_data=True,
     install_requires=[
-        'pyrsistent',
+        'marshmallow',
         'jsonfield',  # TODO: only needed django, make it optional
     ],
 )

@@ -17,25 +17,9 @@ class Storage:
         pass
 
     def store(self, event):
-        # event = self.create_event(
-        #     id=genuuid(),
-        #     name=name,
-        #     aggregate_id=aggregate_id,
-        #     data=data,
-        #     ts=ts,
-        # )
         self.append(event)
         publish(event)
         return event
-
-    # def create_event(self, id, name, aggregate_id, data=None, ts=None):
-    #     return Event(
-    #         id=id,
-    #         name=name,
-    #         aggregate_id=aggregate_id,
-    #         data=data,
-    #         ts=ts,
-    #     )
 
     def append(self, event):
         raise NotImplementedError
